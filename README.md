@@ -1,5 +1,7 @@
 # Sketch to UI
 
+**Live demo:** https://sketch-to-ui.vercel.app
+
 Draw a wireframe on an infinite canvas and watch Claude turn it into a working, responsive HTML prototype, streamed live into a sandboxed preview.
 
 ## Features
