@@ -177,7 +177,7 @@ export default function Studio({ aiEnabled }: { aiEnabled: boolean }) {
         <div className="flex items-center gap-2">
           <span aria-hidden className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-xs font-bold text-on-accent">S↗</span>
           <h1 className="font-semibold tracking-tight">Sketch to UI</h1>
-          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{aiEnabled ? "Claude" : "offline compiler"}</span>
+          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{aiEnabled ? "Live AI" : "Offline preview"}</span>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button type="button" onClick={() => commit(EXAMPLE_SKETCH)} className="rounded-lg px-2 py-1 text-muted hover:text-ink">
@@ -249,7 +249,7 @@ export default function Studio({ aiEnabled }: { aiEnabled: boolean }) {
                 disabled={!aiEnabled}
                 placeholder={
                   !aiEnabled
-                    ? "Offline mode: set ANTHROPIC_API_KEY to add direction and refine"
+                    ? "Offline preview — live AI coming soon"
                     : active
                       ? "Refine: “make it dark mode”, “add a pricing section”…"
                       : "Optional direction: “playful brand, rounded corners”"
@@ -303,7 +303,11 @@ export default function Studio({ aiEnabled }: { aiEnabled: boolean }) {
                       {v.parentId ? " ↺" : ""}
                     </button>
                   ))}
-                  {active && <span className="truncate text-muted">{active.instruction ? `“${active.instruction}”` : "from sketch"} · {active.source}</span>}
+                  {active && (
+                    <span className="truncate text-muted">
+                      {active.instruction ? `“${active.instruction}”` : "from sketch"} · {active.source === "offline" ? "offline" : "AI"}
+                    </span>
+                  )}
                 </>
               )}
             </div>

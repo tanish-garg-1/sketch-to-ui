@@ -1,5 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import type { StreamEvent } from "./stream";
 
 const SYSTEM = `You are a senior front-end engineer who turns low-fidelity wireframes into polished, working prototypes.
@@ -13,6 +13,9 @@ Respond with one complete HTML document and nothing else: start with <!DOCTYPE h
 - Make it responsive from 360px to 1440px wide and accessible: semantic elements, labels for inputs, visible focus styles, and good contrast.
 - Aim for a clean, modern visual design and keep the document under roughly 450 lines.`;
 
+/** Groq's only vision model at time of writing; see console.groq.com/docs/vision. */
+const MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
+
 export interface GenerateInput {
   image: string;
   description: string;
@@ -20,74 +23,68 @@ export interface GenerateInput {
   previousHtml?: string;
 }
 
-let client: Anthropic | null = null;
+let client: Groq | null = null;
 
 export function aiEnabled(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+  return Boolean(process.env.GROQ_API_KEY);
 }
 
-export async function* generateWithClaude(input: GenerateInput, signal: AbortSignal): AsyncGenerator<StreamEvent> {
-  client ??= new Anthropic();
+type ChatMessage = Groq.Chat.Completions.ChatCompletionMessageParam;
 
-  const sketchTurn: Anthropic.Beta.BetaMessageParam = {
+export async function* generateWithGroq(input: GenerateInput, signal: AbortSignal): AsyncGenerator<StreamEvent> {
+  client ??= new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+  const sketchTurn: ChatMessage = {
     role: "user",
     content: [
-      { type: "image", source: { type: "base64", media_type: "image/png", data: input.image } },
       {
         type: "text",
         text: `Here is my wireframe. ${input.description}${
           input.instruction && !input.previousHtml ? `\n\nExtra direction: ${input.instruction}` : ""
         }`,
       },
+      { type: "image_url", image_url: { url: `data:image/png;base64,${input.image}` } },
     ],
   };
-  const messages: Anthropic.Beta.BetaMessageParam[] = input.previousHtml
-    ? [
-        sketchTurn,
-        { role: "assistant", content: input.previousHtml },
-        {
-          role: "user",
-          content: `Revise the prototype: ${input.instruction || "improve it"}\nReturn the full updated HTML document.`,
-        },
-      ]
-    : [sketchTurn];
+  const messages: ChatMessage[] = [
+    { role: "system", content: SYSTEM },
+    sketchTurn,
+    ...(input.previousHtml
+      ? ([
+          { role: "assistant", content: input.previousHtml },
+          {
+            role: "user",
+            content: `Revise the prototype: ${input.instruction || "improve it"}\nReturn the full updated HTML document.`,
+          },
+        ] satisfies ChatMessage[])
+      : []),
+  ];
 
   yield { type: "status", message: "Reading your sketch…" };
 
-  const stream = client.beta.messages.stream(
-    {
-      model: "claude-opus-5",
-      max_tokens: 32000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium" },
-      system: SYSTEM,
-      messages,
-    },
+  const stream = await client.chat.completions.create(
+    { model: MODEL, messages, stream: true, max_completion_tokens: 12000 },
     { signal },
   );
 
   let announcedWriting = false;
-  for await (const event of stream) {
-    if (event.type === "content_block_start" && event.content_block.type === "thinking") {
-      yield { type: "status", message: "Planning the layout…" };
-    } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+  let finishReason: string | null = null;
+  for await (const chunk of stream) {
+    const choice = chunk.choices[0];
+    const text = choice?.delta?.content;
+    if (text) {
       if (!announcedWriting) {
         announcedWriting = true;
         yield { type: "status", message: "Writing HTML…" };
       }
-      yield { type: "delta", text: event.delta.text };
+      yield { type: "delta", text };
     }
+    if (choice?.finish_reason) finishReason = choice.finish_reason;
   }
 
-  const final = await stream.finalMessage();
-  if (final.stop_reason === "refusal") {
-    yield { type: "error", message: "The model declined this request. Try a different sketch or instruction." };
-    return;
-  }
   yield {
     type: "done",
-    source: "claude",
-    warning: final.stop_reason === "max_tokens" ? "The output hit the length limit and may be cut off." : undefined,
+    source: "groq",
+    warning: finishReason === "length" ? "The output hit the length limit and may be cut off." : undefined,
   };
 }

@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ShapesSchema } from "@/editor/schema";
 import type { Shape } from "@/editor/types";
-import { aiEnabled, generateWithClaude } from "@/lib/aiGenerate";
+import { aiEnabled, generateWithGroq } from "@/lib/aiGenerate";
 import { compileToHtml } from "@/lib/compile";
 import { rateLimit } from "@/lib/rateLimit";
 import { ndjsonResponse, type StreamEvent } from "@/lib/stream";
@@ -29,15 +28,17 @@ async function* offline(html: string, signal: AbortSignal): AsyncGenerator<Strea
   yield { type: "done", source: "offline" };
 }
 
-async function* safely(events: AsyncGenerator<StreamEvent>): AsyncGenerator<StreamEvent> {
+/** Duck-types the error rather than importing groq-sdk's error classes, so this never breaks if their shape changes. */
+async function* safely(events: AsyncGenerator<StreamEvent>, signal: AbortSignal): AsyncGenerator<StreamEvent> {
   try {
     yield* events;
   } catch (error) {
-    if (error instanceof Anthropic.APIUserAbortError) return;
-    if (error instanceof Anthropic.RateLimitError) {
+    if (signal.aborted) return;
+    const status = (error as { status?: number })?.status;
+    if (status === 429) {
       yield { type: "error", message: "The AI is busy right now. Try again in a minute." };
-    } else if (error instanceof Anthropic.APIError) {
-      console.error(`Claude API error ${error.status}:`, error.message);
+    } else if (typeof status === "number") {
+      console.error(`Groq API error ${status}:`, (error as Error).message);
       yield { type: "error", message: "The AI service returned an error. Please try again." };
     } else {
       console.error(error);
@@ -65,5 +66,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return ndjsonResponse(safely(generateWithClaude(body, req.signal)), req.signal);
+  return ndjsonResponse(safely(generateWithGroq(body, req.signal), req.signal), req.signal);
 }

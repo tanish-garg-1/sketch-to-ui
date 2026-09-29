@@ -1,7 +1,7 @@
 export type StreamEvent =
   | { type: "status"; message: string }
   | { type: "delta"; text: string }
-  | { type: "done"; source: "claude" | "offline"; warning?: string }
+  | { type: "done"; source: "groq" | "offline"; warning?: string }
   | { type: "error"; message: string };
 
 export function ndjsonResponse(events: AsyncIterable<StreamEvent>, signal?: AbortSignal): Response {

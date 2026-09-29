@@ -7,7 +7,8 @@ export interface Version {
   createdAt: number;
   html: string;
   instruction: string;
-  source: "claude" | "offline";
+  /** "claude" is kept for versions saved in a browser before the Groq switch. */
+  source: "groq" | "claude" | "offline";
   parentId: string | null;
 }
 
@@ -16,7 +17,7 @@ const VersionSchema = z.object({
   createdAt: z.number(),
   html: z.string(),
   instruction: z.string(),
-  source: z.enum(["claude", "offline"]),
+  source: z.enum(["groq", "claude", "offline"]),
   parentId: z.string().nullable(),
 });
 
