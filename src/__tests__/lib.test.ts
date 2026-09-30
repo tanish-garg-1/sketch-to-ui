@@ -125,10 +125,10 @@ describe("stream helpers", () => {
 });
 
 describe("compactForContext", () => {
-  it("strips leading indentation and collapses blank runs, never touching text mid-line", () => {
+  it("strips leading indentation and blank lines, never touching text mid-line", () => {
     const html = "<div>\n    <p>  Log in  </p>\n\n\n\n    <span>a string with \"  spaces  \"</span>\n</div>";
     const out = compactForContext(html);
-    expect(out).toBe('<div>\n<p>  Log in  </p>\n\n<span>a string with "  spaces  "</span>\n</div>');
+    expect(out).toBe('<div>\n<p>  Log in  </p>\n<span>a string with "  spaces  "</span>\n</div>');
   });
 });
 
