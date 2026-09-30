@@ -62,6 +62,22 @@ export async function* readNdjson(res: Response): AsyncGenerator<StreamEvent> {
  * touched there. Applied server- and client-side wherever we hand generated HTML to an iframe, so
  * a still-broken assumption anywhere in the pipeline can't reach what a visitor sees.
  */
+/**
+ * Strips pure indentation and collapses blank lines before sending a previous version back to the
+ * model as context on a refine turn. Only ever removes whitespace that is insignificant in
+ * HTML/CSS/JS (leading indent, extra blank lines) — never touches text mid-line, so it can't alter
+ * a string literal or visible copy. This meaningfully shrinks the token cost of a refine turn
+ * without changing the document's meaning; the version actually shown to the visitor is never
+ * touched by this, only the copy of it fed back to the model.
+ */
+export function compactForContext(html: string): string {
+  return html
+    .split("\n")
+    .map((line) => line.replace(/^[ \t]+/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 function repairStyleBlocks(html: string): string {
   return html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (_m, open: string, css: string, close: string) => {
     const fixed = css.replace(/}(\s*),(\s*)(?=[a-zA-Z*.:#[&])/g, "}$1$2");

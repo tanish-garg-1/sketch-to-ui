@@ -35,10 +35,16 @@ async function* safely(events: AsyncGenerator<StreamEvent>, signal: AbortSignal)
   } catch (error) {
     if (signal.aborted) return;
     const status = (error as { status?: number })?.status;
+    const message = error instanceof Error ? error.message : String(error);
     if (status === 429) {
       yield { type: "error", message: "The AI is busy right now. Try again in a minute." };
+    } else if (status === 413 && message.includes("rate_limit_exceeded")) {
+      // Groq's free-tier per-minute token budget, not a request-size problem as the code implies —
+      // seen in practice when several generations land in the same minute.
+      console.error("Groq token budget exceeded:", message);
+      yield { type: "error", message: "The AI's per-minute budget is used up. Wait a minute and try again." };
     } else if (typeof status === "number") {
-      console.error(`Groq API error ${status}:`, (error as Error).message);
+      console.error(`Groq API error ${status}:`, message);
       yield { type: "error", message: "The AI service returned an error. Please try again." };
     } else {
       console.error(error);

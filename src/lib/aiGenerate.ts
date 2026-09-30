@@ -1,5 +1,6 @@
 import "server-only";
 import Groq from "groq-sdk";
+import { compactForContext } from "./stream";
 import type { StreamEvent } from "./stream";
 
 const SYSTEM = `You are a senior front-end engineer who turns low-fidelity wireframes into polished, working prototypes.
@@ -15,7 +16,9 @@ Respond with one complete HTML document and nothing else: start with <!DOCTYPE h
 - Aim for a clean, modern visual design and keep the document under roughly 450 lines.`;
 
 /** Groq's only vision model at time of writing; see console.groq.com/docs/vision. */
-const MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
+const VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
+/** A refine turn is text-only (no image), so it runs on a plain text model with its own, separate token budget. */
+const REFINE_MODEL = process.env.GROQ_REFINE_MODEL || "openai/gpt-oss-20b";
 
 export interface GenerateInput {
   image: string;
@@ -35,36 +38,39 @@ type ChatMessage = Groq.Chat.Completions.ChatCompletionMessageParam;
 export async function* generateWithGroq(input: GenerateInput, signal: AbortSignal): AsyncGenerator<StreamEvent> {
   client ??= new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-  const sketchTurn: ChatMessage = {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: `Here is my wireframe. ${input.description}${
-          input.instruction && !input.previousHtml ? `\n\nExtra direction: ${input.instruction}` : ""
-        }`,
-      },
-      { type: "image_url", image_url: { url: `data:image/png;base64,${input.image}` } },
-    ],
-  };
-  const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM },
-    sketchTurn,
-    ...(input.previousHtml
-      ? ([
-          { role: "assistant", content: input.previousHtml },
-          {
-            role: "user",
-            content: `Revise the prototype: ${input.instruction || "improve it"}\nReturn the full updated HTML document.`,
-          },
-        ] satisfies ChatMessage[])
-      : []),
-  ];
+  // Revising existing HTML is a text task — the sketch's structure is already captured in
+  // previousHtml, so refine turns skip the image entirely. That drops the vision model's fixed
+  // ~2048-token image cost, which matters a lot on the free tier's per-minute token budget,
+  // especially stacked on top of a full previous document.
+  const messages: ChatMessage[] = input.previousHtml
+    ? [
+        { role: "system", content: SYSTEM },
+        { role: "assistant", content: compactForContext(input.previousHtml) },
+        {
+          role: "user",
+          content: `Revise the prototype: ${input.instruction || "improve it"}\nReturn the full updated HTML document.`,
+        },
+      ]
+    : [
+        { role: "system", content: SYSTEM },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Here is my wireframe. ${input.description}${
+                input.instruction ? `\n\nExtra direction: ${input.instruction}` : ""
+              }`,
+            },
+            { type: "image_url", image_url: { url: `data:image/png;base64,${input.image}` } },
+          ],
+        },
+      ];
 
-  yield { type: "status", message: "Reading your sketch…" };
+  yield { type: "status", message: input.previousHtml ? "Reading the current version…" : "Reading your sketch…" };
 
   const stream = await client.chat.completions.create(
-    { model: MODEL, messages, stream: true, max_completion_tokens: 12000 },
+    { model: input.previousHtml ? REFINE_MODEL : VISION_MODEL, messages, stream: true, max_completion_tokens: 12000 },
     { signal },
   );
 

@@ -5,7 +5,7 @@ import { injectBridge, isBridgeMessage, BRIDGE_SOURCE } from "@/lib/bridge";
 import { compileToHtml } from "@/lib/compile";
 import { buildTree, describeSketch, toColumns, toRows } from "@/lib/layout";
 import { rateLimit } from "@/lib/rateLimit";
-import { extractHtml, readNdjson } from "@/lib/stream";
+import { compactForContext, extractHtml, readNdjson } from "@/lib/stream";
 
 const box = (id: string, role: string, x: number, y: number, w: number, h: number, text = ""): Shape =>
   ({ id, kind: "box", role, x, y, w, h, text }) as Shape;
@@ -121,6 +121,14 @@ describe("stream helpers", () => {
     expect(out).not.toMatch(/}\s*,\s*body \*/);
     // The identical-looking ", {" inside <script> is valid JS and must survive untouched.
     expect(out).toContain("const items = [{ a: 1 }, { b: 2 }];");
+  });
+});
+
+describe("compactForContext", () => {
+  it("strips leading indentation and collapses blank runs, never touching text mid-line", () => {
+    const html = "<div>\n    <p>  Log in  </p>\n\n\n\n    <span>a string with \"  spaces  \"</span>\n</div>";
+    const out = compactForContext(html);
+    expect(out).toBe('<div>\n<p>  Log in  </p>\n\n<span>a string with "  spaces  "</span>\n</div>');
   });
 });
 
