@@ -107,6 +107,21 @@ describe("stream helpers", () => {
     expect(extractHtml("Sure! Here it is:\n<!doctype html><html></html>\nEnjoy")).toBe("<!doctype html><html></html>");
     expect(extractHtml("<!DOCTYPE html><html><body>partial")).toBe("<!DOCTYPE html><html><body>partial");
   });
+
+  it("repairs a stray comma the model sometimes leaves before a selector, without touching <script>", () => {
+    const html =
+      "<!doctype html><html><head><style>\n" +
+      "body { color: red }\n\n" +
+      ", body * { font-family: inherit; }\n" +
+      "</style></head><body><script>\n" +
+      "const items = [{ a: 1 }, { b: 2 }];\n" +
+      "</script></body></html>";
+    const out = extractHtml(html);
+    expect(out).toContain("body * { font-family: inherit; }");
+    expect(out).not.toMatch(/}\s*,\s*body \*/);
+    // The identical-looking ", {" inside <script> is valid JS and must survive untouched.
+    expect(out).toContain("const items = [{ a: 1 }, { b: 2 }];");
+  });
 });
 
 describe("preview bridge", () => {

@@ -53,6 +53,22 @@ export async function* readNdjson(res: Response): AsyncGenerator<StreamEvent> {
   }
 }
 
+/**
+ * Fixes a narrow, observed model mistake: a CSS rule that opens with a stray comma right after
+ * the previous rule's closing brace, e.g. "}\n, body * { ... }" instead of "body, body * { ... }".
+ * A "}" is never followed by a bare "," in valid CSS, so dropping that comma always makes the
+ * next rule parse correctly on its own, with no change in meaning. Only ever touches text inside
+ * <style> tags — "}, {" is completely normal, valid JavaScript inside <script>, and must not be
+ * touched there. Applied server- and client-side wherever we hand generated HTML to an iframe, so
+ * a still-broken assumption anywhere in the pipeline can't reach what a visitor sees.
+ */
+function repairStyleBlocks(html: string): string {
+  return html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (_m, open: string, css: string, close: string) => {
+    const fixed = css.replace(/}(\s*),(\s*)(?=[a-zA-Z*.:#[&])/g, "}$1$2");
+    return open + fixed + close;
+  });
+}
+
 /** Pulls the HTML document out of model output that may include fences or stray prose. */
 export function extractHtml(raw: string): string {
   let text = raw.replace(/^\s*```(?:html)?\s*\n?/i, "");
@@ -62,5 +78,5 @@ export function extractHtml(raw: string): string {
   if (start > 0) text = text.slice(start);
   const end = text.search(/<\/html>/i);
   if (end >= 0) text = text.slice(0, end + "</html>".length);
-  return text.trim();
+  return repairStyleBlocks(text.trim());
 }
