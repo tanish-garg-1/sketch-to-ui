@@ -198,7 +198,7 @@ export default function Studio({ aiEnabled }: { aiEnabled: boolean }) {
       </header>
 
       <div ref={mainRef} className="flex min-h-0 flex-1 flex-col lg:flex-row" style={{ ["--split" as string]: `${split}%` }}>
-        <section aria-label="Sketch" className="relative h-[55vh] min-h-0 lg:h-auto lg:w-[var(--split)]">
+        <section aria-label="Sketch" className="relative h-[55vh] min-h-0 lg:h-auto lg:w-[var(--split)] lg:shrink-0">
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-col items-start gap-2">
             <Toolbar choice={choice} onChoice={setChoice} onUndo={undo} onRedo={redo} canUndo={history.past.length > 0} canRedo={history.future.length > 0} />
             <Inspector shapes={shapes} selected={selected} onCommit={commit} onSelect={setSelected} />
@@ -229,7 +229,7 @@ export default function Studio({ aiEnabled }: { aiEnabled: boolean }) {
           className="hidden w-1.5 shrink-0 cursor-col-resize bg-line outline-none hover:bg-accent focus-visible:bg-accent lg:block"
         />
 
-        <section aria-label="Prototype" className="flex min-h-[60vh] flex-1 flex-col border-t border-line bg-surface lg:min-h-0 lg:border-t-0">
+        <section aria-label="Prototype" className="flex min-h-[60vh] min-w-0 flex-1 flex-col border-t border-line bg-surface lg:min-h-0 lg:border-t-0">
           <div className="space-y-2 border-b border-line p-3">
             <form
               className="flex flex-col gap-2 sm:flex-row"
